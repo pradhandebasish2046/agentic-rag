@@ -11,3 +11,5 @@ collection_name = "startups"
 
 k = 5
 weights = [0.6,0.5]
+
+no_of_chat_history_pair = 3

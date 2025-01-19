@@ -1,4 +1,5 @@
 experiment/
 .chainlit/
 .files/
-sample_pdfs
+sample_pdfs/
+logs/

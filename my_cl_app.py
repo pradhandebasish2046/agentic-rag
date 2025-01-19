@@ -10,24 +10,17 @@ from src.services.retriever.ensemble_retriever import custom_ensemble_retriever
 from src.constants import *
 from qdrant_client import QdrantClient,models
 from src.utils.logger import logger
+from src.utils.helpers import update_qa_dict
+from collections import OrderedDict
+from src.services.llm.prompt import create_prompt_without_history,create_prompt_with_history,modify_query
+from src.services.llm.llm_call import llm_call
+from src.services.web_search.web_search import search
+
 logger.info(f">>>>> Started >>>>>")
-
-
-def process_file1(pdf_file):
-    # time.sleep(3)  # Simulate processing delay
-    doc = fitz.open(pdf_file.path)
-    total = ""
-    for page in doc:
-        text = page.get_text("text", sort=True)
-        total+=text
-    return len(total)
-
-def process_file2(total):
-    time.sleep(1)
-    return total//100
 
 qdrant_client = None
 keyword_retriever = None
+chat_history = OrderedDict()
 @cl.on_chat_start
 async def start():
     # Wait for the user to upload files
@@ -48,27 +41,11 @@ async def start():
     all_documents,all_metadata,all_corpus_json,all_ids = [],[],[],[]
     logger.info(f">>>>> Chunking Started >>>>>")
     for pdf_file in files:
-        # Notify the user that processing has started for the file
-        # start_msg = cl.Message(content=f"Processing `{pdf_file.name}`...")
-        # await start_msg.send()
-
-        # Process the file (this part is where the actual file processing happens)
         documents, metadata, corpus_json, uuids  = final_chunking_pipeline(pdf_file.path)
         all_documents.extend(documents)
         all_metadata.extend(metadata)
         all_corpus_json.extend(corpus_json)
         all_ids.extend(uuids)
-
-        # Notify the user that processing has ended for the file
-        # end_msg = cl.Message(content=f"Processing complete for 1`{pdf_file.name}`. It contains {len(documents),len(metadata)} chunks")
-        # await end_msg.send()
-        # n2 = process_file2(n)
-        # end_msg = cl.Message(content=f"Processing complete for 2`{pdf_file.name}`. It contains {n2} characters on the first page.")
-        # await end_msg.send()
-
-        # Store the result for the final summary message
-        # lengths.append(n)
-        # final_summary.append(f"{pdf_file.name}: {n} characters on the first page.")
 
     logger.info(f">>>>> Chunking completed with no of chunks {len(all_documents), len(all_metadata), len(all_ids)} >>>>>")
     logger.info(f">>>>> Embedding Started >>>>>")
@@ -81,7 +58,7 @@ async def start():
     keyword_retriever =  create_bm25s_db(all_corpus_json)
     logger.info(f">>>>> Embedding Completed >>>>>")
 
-    msg = cl.Message(content=f"Embedding Completed. Not you can ask question😊")
+    msg = cl.Message(content=f"Embedding Completed. Now you can ask question😊")
     await msg.send()
 
 @cl.on_message
@@ -89,6 +66,8 @@ async def main(message: cl.Message):
     query = message.content
     global qdrant_client
     global keyword_retriever
+    global chat_history
+    logger.info(f">>>>> Chat History {chat_history} >>>>>")
     # qdrant_client = QdrantClient(path=emd_path)
     # qdrant_client.set_model("BAAI/bge-base-en-v1.5")
     
@@ -96,9 +75,52 @@ async def main(message: cl.Message):
     #                                                         client=qdrant_client,collection_name=collection_name,
     #                                                         keyword_retriever=keyword_retriever)
     logger.info(f">>>>> Retrieve started >>>>>")
-    retrieve_context, unique_source,all_source = custom_ensemble_retriever(query=query,k=k,weights=weights,
-                                                            client=qdrant_client,collection_name=collection_name,
-                                                            keyword_retriever=keyword_retriever)
-
-    msg = cl.Message(content=f"Retrieving Data {len(retrieve_context)} and sources {all_source}")
+    msg = cl.Message(content="Thinking ...")
     await msg.send()
+    
+    if len(chat_history) == 0:
+        logger.info(f">>>>> Retrieving without history >>>>>")
+
+        retrieve_context, unique_source,all_source = custom_ensemble_retriever(query=query,k=k,weights=weights,
+                                                                client=qdrant_client,collection_name=collection_name,
+                                                                keyword_retriever=keyword_retriever)
+        prompt_without_history = create_prompt_without_history(query,retrieve_context)
+        answer = llm_call(prompt_without_history)
+        if "no information is available" in answer.lower() or "no information available" in answer.lower():
+            logger.info(f">>>>> Searching in Web >>>>>")
+            msg = cl.Message(content="Did not find the answer inside uploaded pdfs. Searching in web😊😊")
+            await msg.send()
+            search_results = search(query)
+            if search_results is not None:
+                prompt_without_history = create_prompt_without_history(query,search_results)
+                answer = llm_call(prompt_without_history)
+            else:
+                answer = "Error while searching in web"
+
+        chat_history = update_qa_dict(query, answer, chat_history, no_of_chat_history_pair)
+        msg = cl.Message(content=answer)
+        await msg.send()
+    else:
+        logger.info(f">>>>> Retrieving with history >>>>>")
+        modified_query = modify_query(query,chat_history)
+        logger.info(f">>>>> Modified Query {modified_query} >>>>>")
+        retrieve_context, unique_source,all_source = custom_ensemble_retriever(query=modified_query,k=k,weights=weights,
+                                                                client=qdrant_client,collection_name=collection_name,
+                                                                keyword_retriever=keyword_retriever)
+        
+        prompt_with_history = create_prompt_with_history(modified_query,chat_history,retrieve_context)
+        logger.info(f">>>>> prompt_with_history {prompt_with_history} >>>>>")
+        answer = llm_call(prompt_with_history)
+        if "no information is available" in answer.lower() or "no information available" in answer.lower():
+            logger.info(f">>>>> Searching in Web >>>>>")
+            msg = cl.Message(content="Did not find the answer inside uploaded pdfs. Searching in web😊😊")
+            await msg.send()
+            search_results = search(query)
+            if search_results is not None:
+                prompt_without_history = create_prompt_without_history(query,search_results)
+                answer = llm_call(prompt_without_history)
+            else:
+                answer = "Error while searching in web"
+        chat_history = update_qa_dict(modified_query, answer, chat_history, no_of_chat_history_pair)
+        msg = cl.Message(content=answer)
+        await msg.send()
