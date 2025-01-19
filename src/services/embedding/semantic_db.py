@@ -1,7 +1,10 @@
 from qdrant_client import QdrantClient,models
 import shutil
 import os
+from src.utils.logger import logger
+
 def create_qdrant_dense_emd(documents,metadata,ids,emd_path,collection_name):
+    logger.info(f">>>>> create_qdrant_dense_emd started >>>>>")
     if os.path.exists(emd_path): 
         shutil.rmtree(emd_path)
 
@@ -26,4 +29,5 @@ def create_qdrant_dense_emd(documents,metadata,ids,emd_path,collection_name):
     parallel=0,  # Use all available CPU cores to encode data.
     # Requires wrapping code into if __name__ == '__main__' block
     )
+    logger.info(f">>>>> create_qdrant_dense_emd completed >>>>>")
     return client

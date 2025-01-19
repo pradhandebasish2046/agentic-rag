@@ -7,6 +7,8 @@ import shutil
 import numpy as np
 import bm25s
 import os
+from src.utils.logger import logger
+
 from src.constants import chunk_size,min_chunk_size
 
 def num_tokens_from_string(string, encoding_name = "cl100k_base") -> int:
@@ -120,11 +122,18 @@ def create_docs(chunks,pages,file_name,ids):
     return documents, metadata, corpus_json
 
 def final_chunking_pipeline(path):
+    logger.info(f">>>>> Chunking Started >>>>>")
     page_chunk_lst = read_pdf(path)
     total_text = "".join(page_chunk_lst[i].strip("\n")+f"!@#{i+1}!@#\n" for i in range(len(page_chunk_lst)))
+    logger.info(f">>>>> read_pdf Completed >>>>>")
     parts = split_docs(total_text)
+    logger.info(f">>>>> Split docs Completed >>>>>")
     list_of_chunk_docs = parts_to_chunk(parts)
+    logger.info(f">>>>> parts_to_chunk Completed >>>>>")
     final_chunk_1st,page_details = find_page_num(list_of_chunk_docs)
-    uuids = [str(uuid4()) for _ in range(len(documents))]
+    logger.info(f">>>>> find_page_num Completed >>>>>")
+    uuids = [str(uuid4()) for _ in range(len(list_of_chunk_docs))]
     documents, metadata, corpus_json = create_docs(list_of_chunk_docs,page_details,path,uuids)
-    return documents, metadata, corpus_json
+    logger.info(f">>>>> create_docs Completed >>>>>")
+    logger.info(f">>>>> Chunking Pipeline Completed >>>>>")
+    return documents, metadata, corpus_json,uuids
