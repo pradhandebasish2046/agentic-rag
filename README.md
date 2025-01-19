@@ -1,5 +1,8 @@
 # chat-bot
 
+![image](https://github.com/user-attachments/assets/bb38ac55-3940-4b74-865c-d094ffc5aafc)
+
+
 # Scope of Improvement
 1. Prompt Engineering 
 2. Better context preserve
