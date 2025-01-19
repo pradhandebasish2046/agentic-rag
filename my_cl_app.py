@@ -15,12 +15,14 @@ from collections import OrderedDict
 from src.services.llm.prompt import create_prompt_without_history,create_prompt_with_history,modify_query
 from src.services.llm.llm_call import llm_call
 from src.services.web_search.web_search import search
+from src.utils.helpers import extract_source_pdf
 
 logger.info(f">>>>> Started >>>>>")
 
 qdrant_client = None
 keyword_retriever = None
 chat_history = OrderedDict()
+uploaded_files_path,uploaded_files_name = [],[]
 @cl.on_chat_start
 async def start():
     # Wait for the user to upload files
@@ -40,7 +42,13 @@ async def start():
     await msg.send()
     all_documents,all_metadata,all_corpus_json,all_ids = [],[],[],[]
     logger.info(f">>>>> Chunking Started >>>>>")
+
+    global uploaded_files_name
+    global uploaded_files_path
+
     for pdf_file in files:
+        uploaded_files_name.append(pdf_file.name)
+        uploaded_files_path.append(pdf_file.path)
         documents, metadata, corpus_json, uuids  = final_chunking_pipeline(pdf_file.path)
         all_documents.extend(documents)
         all_metadata.extend(metadata)
@@ -67,6 +75,9 @@ async def main(message: cl.Message):
     global qdrant_client
     global keyword_retriever
     global chat_history
+    global uploaded_files_path
+    global uploaded_files_name
+
     logger.info(f">>>>> Chat History {chat_history} >>>>>")
     # qdrant_client = QdrantClient(path=emd_path)
     # qdrant_client.set_model("BAAI/bge-base-en-v1.5")
@@ -84,6 +95,7 @@ async def main(message: cl.Message):
         retrieve_context, unique_source,all_source = custom_ensemble_retriever(query=query,k=k,weights=weights,
                                                                 client=qdrant_client,collection_name=collection_name,
                                                                 keyword_retriever=keyword_retriever)
+        logger.info(f">>>>> Sources {all_source} >>>>>")
         prompt_without_history = create_prompt_without_history(query,retrieve_context)
         answer = llm_call(prompt_without_history)
         if "no information is available" in answer.lower() or "no information available" in answer.lower():
@@ -96,6 +108,24 @@ async def main(message: cl.Message):
                 answer = llm_call(prompt_without_history)
             else:
                 answer = "Error while searching in web"
+        else:
+            # logger.info(f">>>>> uploaded_files_path {uploaded_files_path} >>>>>")
+            # all_elements = []
+            for each_source in all_source:
+                file_source = each_source.split("#")[0]
+                if file_source in uploaded_files_path:
+                    index = uploaded_files_path.index(file_source)
+                    pdf_file_name = uploaded_files_name[index]
+                    # pdf_file_name = os.path.basename(each_source)
+                    _,page_number = extract_source_pdf(each_source)
+                    # logger.info(f">>>>> PDF NAME {pdf_file_name} {page_number} {each_source}>>>>>")
+                
+                    if (pdf_file_name is not None) and (page_number is not None):
+                        element = [cl.Pdf(name=pdf_file_name, display="side", path=file_source, page=page_number)]
+                        # all_elements.append(element)
+                        await cl.Message(content=f"Source {pdf_file_name}", elements=element).send()
+                        break
+
 
         chat_history = update_qa_dict(query, answer, chat_history, no_of_chat_history_pair)
         msg = cl.Message(content=answer)
@@ -108,6 +138,7 @@ async def main(message: cl.Message):
                                                                 client=qdrant_client,collection_name=collection_name,
                                                                 keyword_retriever=keyword_retriever)
         
+        logger.info(f">>>>> Sources {all_source} >>>>>")
         prompt_with_history = create_prompt_with_history(modified_query,chat_history,retrieve_context)
         logger.info(f">>>>> prompt_with_history {prompt_with_history} >>>>>")
         answer = llm_call(prompt_with_history)
@@ -121,6 +152,25 @@ async def main(message: cl.Message):
                 answer = llm_call(prompt_without_history)
             else:
                 answer = "Error while searching in web"
+
+        else:
+            # logger.info(f">>>>> uploaded_files_path {uploaded_files_path} >>>>>")
+            # all_elements = []
+            for each_source in all_source:
+                file_source = each_source.split("#")[0]
+                if file_source in uploaded_files_path:
+                    index = uploaded_files_path.index(file_source)
+                    pdf_file_name = uploaded_files_name[index]
+                    logger.info(f">>>>> PDF NAME {pdf_file_name} >>>>>")
+                    # pdf_file_name = os.path.basename(each_source)
+                    _,page_number = extract_source_pdf(each_source)
+                
+                    if (pdf_file_name is not None) and (page_number is not None):
+                        element = [cl.Pdf(name=pdf_file_name, display="side", path=file_source, page=page_number)]
+                        # all_elements.append(element)
+                        await cl.Message(content=f"Source {pdf_file_name}", elements=element).send()
+                        break
+        
         chat_history = update_qa_dict(modified_query, answer, chat_history, no_of_chat_history_pair)
         msg = cl.Message(content=answer)
         await msg.send()

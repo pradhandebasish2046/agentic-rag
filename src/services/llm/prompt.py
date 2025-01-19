@@ -27,7 +27,7 @@ def modify_query(query,chat_history):
 
 def create_prompt_without_history(curr_query,context):
     messages = [
-        {"role": "system", "content": "Your task is to analyze the users query and give the answer crisply based on the given context. If you can not find the answer politely say 'No information is available to generate the answer' "},
+        {"role": "system", "content": "Your task is to analyze the users query and give the answer crisply based on the given context with source link if available. If you can not find the answer politely say 'No information is available to generate the answer' "},
         {"role": "user", "content": f"Here is the user query\n{curr_query}\nHere is the relevant context separated by -----------------\n{context}"}
     ]
     logger.info(f">>>>>> Message without history {messages}<<<<<<")
