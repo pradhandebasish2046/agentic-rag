@@ -6,7 +6,8 @@ __pycache__/
 .files
 __pycache__
 .env
-
+chainlit.md
+sample_pdfs
 # C extensions
 *.so
 
