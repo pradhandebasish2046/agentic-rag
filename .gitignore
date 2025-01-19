@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.chainlit
+.files
+__pycache__
+.env
 
 # C extensions
 *.so
