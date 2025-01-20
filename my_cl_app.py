@@ -3,6 +3,7 @@ from src.services.final_pipeline import generate_response
 from io import BytesIO
 import fitz
 import time
+import shutil
 from src.services.chunking.custom_chunking import final_chunking_pipeline
 from src.services.embedding.semantic_db import create_qdrant_dense_emd
 from src.services.embedding.keyword_db import create_bm25s_db
@@ -16,6 +17,7 @@ from src.services.llm.prompt import create_prompt_without_history,create_prompt_
 from src.services.llm.llm_call import llm_call
 from src.services.web_search.web_search import search
 from src.utils.helpers import extract_source_pdf
+
 
 logger.info(f">>>>> Started >>>>>")
 
@@ -62,7 +64,13 @@ async def start():
     global qdrant_client
     global keyword_retriever
 
-    qdrant_client = create_qdrant_dense_emd(documents,metadata,all_ids,emd_path,collection_name)
+    if os.path.exists(emd_path): 
+        shutil.rmtree(emd_path)
+
+    client = QdrantClient(path = emd_path)
+    client.set_model("BAAI/bge-base-en-v1.5")
+
+    qdrant_client = create_qdrant_dense_emd(documents,metadata,all_ids,client,collection_name)
     keyword_retriever =  create_bm25s_db(all_corpus_json)
     logger.info(f">>>>> Embedding Completed >>>>>")
 
