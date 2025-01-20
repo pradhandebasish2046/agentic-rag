@@ -17,7 +17,8 @@ from src.services.llm.prompt import create_prompt_without_history,create_prompt_
 from src.services.llm.llm_call import llm_call
 from src.services.web_search.web_search import search
 from src.utils.helpers import extract_source_pdf
-
+import asyncio
+import concurrent.futures
 
 logger.info(f">>>>> Started >>>>>")
 
@@ -64,13 +65,25 @@ async def start():
     global qdrant_client
     global keyword_retriever
 
-    if os.path.exists(emd_path): 
-        shutil.rmtree(emd_path)
+    def generate_client(emd_path):
+        if os.path.exists(emd_path): 
+            shutil.rmtree(emd_path)
 
-    client = QdrantClient(path = emd_path)
-    client.set_model("BAAI/bge-base-en-v1.5")
+        client = QdrantClient(path = emd_path)
+        client.set_model("BAAI/bge-base-en-v1.5")
+        return client
+    
+    loop1 = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        client = await loop1.run_in_executor(pool, generate_client, emd_path)
 
-    qdrant_client = create_qdrant_dense_emd(documents,metadata,all_ids,client,collection_name)
+
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        qdrant_client = await loop.run_in_executor(pool, create_qdrant_dense_emd, documents, metadata, all_ids, client, collection_name)
+
+
+    # qdrant_client = create_qdrant_dense_emd(documents,metadata,all_ids,client,collection_name)
     keyword_retriever =  create_bm25s_db(all_corpus_json)
     logger.info(f">>>>> Embedding Completed >>>>>")
 
