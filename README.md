@@ -9,6 +9,7 @@
 2. Better context preserve
 3. Latency
 4. Handling source links properly
+5. Better chunking appproach
 
 
 
