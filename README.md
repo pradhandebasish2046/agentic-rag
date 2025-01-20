@@ -1,6 +1,11 @@
 # chat-bot
 
-![image](https://github.com/user-attachments/assets/f35c31b8-39a3-4c28-a71d-d77de5850aaf)
+
+![image]
+
+https://github.com/user-attachments/assets/9e6a6ba8-6ccd-4738-af87-4de863c43818
+
+(https://github.com/user-attachments/assets/f35c31b8-39a3-4c28-a71d-d77de5850aaf)
 
 
 
